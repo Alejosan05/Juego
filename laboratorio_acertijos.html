@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El Laboratorio de las Variables</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<style>
+  :root { --bg:#1f2a44; --panel:#2e3b5e; --ink:#f2efe6; --gold:#ffd166; --coral:#ff8f8f; --ok:#6ee7a8; --bad:#ff7b7b; --s:clamp(26px,7vw,40px); }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:12px;
+         background:var(--bg); color:var(--ink); font:11px/1.9 "Press Start 2P","Courier New",monospace; }
+  main { width:100%; max-width:560px; background:var(--panel); padding:16px; border:4px solid var(--ink); box-shadow:8px 8px 0 #0e1424; }
+  h1 { font-size:15px; line-height:1.5; margin:0 0 10px; }
+  h2 { font-size:12px; margin:0 0 6px; color:var(--gold); }
+  p { margin:0 0 10px; }
+  .hidden { display:none; }
+  #timer { font-size:16px; color:var(--gold); } #timer.low { color:var(--bad); }
+  .barra { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .mapa { display:grid; grid-template-columns:repeat(11,var(--s)); justify-content:center; margin:10px 0; border:3px solid var(--ink); width:max-content; max-width:100%; margin-inline:auto; }
+  .t { width:var(--s); height:var(--s); display:flex; flex-direction:column; align-items:center; justify-content:center; background:#26345a; font-size:calc(var(--s) * .4); line-height:1.1; }
+  .t.w { background:#0e1424; }
+  .t.i { background:var(--gold); color:#1f2a44; border:3px solid #26345a; }
+  .t.k { background:#bde0fe; color:#1f2a44; border:2px solid #0e1424; }
+  .t.k b { font-size:calc(var(--s) * .26); } .t.k i { font-style:normal; }
+  button { font:inherit; padding:8px 10px; border:3px solid var(--ink); background:var(--gold); color:#1f2a44; cursor:pointer; box-shadow:3px 3px 0 #0e1424; }
+  button:active { transform:translate(2px,2px); box-shadow:1px 1px 0 #0e1424; }
+  :focus-visible { outline:3px dashed var(--gold); outline-offset:2px; }
+  .pad { display:grid; grid-template-columns:repeat(3,52px); gap:6px; justify-content:center; margin:8px 0; }
+  .pad button { padding:8px 0; }
+  #msg { min-height:22px; } .ok { color:var(--ok); } .bad { color:var(--bad); }
+  small { font-size:9px; line-height:1.9; display:block; opacity:.85; }
+</style>
+</head>
+<body>
+<main>
+  <section id="inicio">
+    <h1>El Laboratorio de las Variables</h1>
+    <p>Recorre el mapa, recoge números y guárdalos en recipientes con nombre de variable. En cada nivel resuelve un acertijo antes de que se acabe el tiempo. ¡Buena suerte!</p>
+    <button id="btnIniciar">Iniciar juego</button>
+  </section>
+
+  <section id="juego" class="hidden">
+    <div class="barra"><span id="timer">10:00</span><span id="mano"></span></div>
+    <h2 id="titulo"></h2>
+    <p id="acertijo"></p>
+    <div class="mapa" id="mapa"></div>
+    <div class="pad">
+      <span></span><button data-d="0,-1" aria-label="Arriba">↑</button><span></span>
+      <button data-d="-1,0" aria-label="Izquierda">←</button><button id="btnSoltar" aria-label="Soltar">✋</button><button data-d="1,0" aria-label="Derecha">→</button>
+      <span></span><button data-d="0,1" aria-label="Abajo">↓</button><button id="btnNivel" aria-label="Reiniciar nivel">↺</button>
+    </div>
+    <div id="msg" role="status"></div>
+    <button id="btnSig" class="hidden">Siguiente nivel</button>
+    <small>Muévete con flechas o WASD. Pisa un número para recogerlo (solo cabe uno en la mano). Choca contra un recipiente: si está vacío, guarda el número; si ya tiene uno, los intercambia; con la mano vacía, saca el valor. Espacio suelta lo que llevas; R reinicia el nivel.</small>
+  </section>
+
+  <section id="final" class="hidden">
+    <h1 id="finalTitulo"></h1>
+    <p id="finalTexto"></p>
+    <button id="btnReiniciar">Jugar de nuevo</button>
+  </section>
+</main>
+
+<script>
+  const TOTAL = 600; // segundos para los 4 niveles
+  const $ = id => document.getElementById(id);
+
+  // Mapa: # pared · . piso · @ jugador · minúscula = recipiente · MAYÚSCULA = número (valor en "it")
+  const NIVELES = [
+    { t: "Nivel 1 · Almacenar",
+      q: "Acertijo: si y + 5 = 8 y x − 3 = 1, guarda el valor correcto en x y en y. Luego guarda en s la suma de x e y.",
+      map: ["###########", "#@..A...B.#", "#.........#", "#..x.y.s..#", "#.........#", "#C..D.E.F.#", "###########"],
+      it: { A: "3", B: "4", C: "8", D: "5", E: "1", F: "7" },
+      cont: () => ({ x: { v: null }, y: { v: null }, s: { v: null } }),
+      ok: c => c.x.v === 4 && c.y.v === 3 && c.s.v === 7 },
+    { t: "Nivel 2 · Intercambiar",
+      q: "Acertijo: x vale 3 y y vale 4. Haz que x valga 4 y y valga 3 sin perder ningún valor. Tienes un recipiente temporal t.",
+      map: ["###########", "#.........#", "#@..x.y.t.#", "#.........#", "###########"],
+      it: {},
+      cont: () => ({ x: { v: 3 }, y: { v: 4 }, t: { v: null } }),
+      ok: c => c.x.v === 4 && c.y.v === 3 },
+    { t: "Nivel 3 · Guardar el resultado",
+      q: "Acertijo: piensa en el número guardado en n. Multiplícalo por 2, súmale 10, divide entre 2 y réstale el número original. Guarda el resultado en r.",
+      map: ["###########", "#@..A...B.#", "#.........#", "#...n...r.#", "#....H....#", "#C.D.E.F.G#", "###########"],
+      it: { A: "5", B: "10", C: "3", D: "12", E: "7", F: "2", G: "14", H: "6" },
+      cont: () => ({ n: { v: [3, 4, 6, 7, 8, 9][Math.random() * 6 | 0] }, r: { v: null } }),
+      ok: c => c.r.v === 5 },
+    { t: "Nivel 4 · Completar el cuadro",
+      q: "Acertijo: coloca un número en a, b, c y d para que a + b = 8, c + d = 3, a × c = 10 y b − d = 2.",
+      map: ["###########", "#@.A.B.C..#", "#..a...b..#", "#.........#", "#..c...d..#", "#....I....#", "#D.E.F.G.H#", "###########"],
+      it: { A: "1", B: "2", C: "3", D: "5", E: "4", F: "7", G: "6", H: "8", I: "9" },
+      cont: () => ({ a: { v: null }, b: { v: null }, c: { v: null }, d: { v: null } }),
+      ok: c => [c.a, c.b, c.c, c.d].every(o => o.v !== null) &&
+               c.a.v + c.b.v === 8 && c.c.v + c.d.v === 3 && c.a.v * c.c.v === 10 && c.b.v - c.d.v === 2 }
+  ];
+
+  let nivel, lev, conts, items, pos, hand, bloqueado, restante, intervalo;
+
+  const msg = (t, ok) => { $("msg").textContent = t; $("msg").className = ok ? "ok" : "bad"; };
+  const contAt = (c, r) => Object.keys(conts).find(k => conts[k].c === c && conts[k].r === r);
+
+  function cargar(i) {
+    nivel = i; lev = NIVELES[i]; conts = lev.cont(); items = {}; hand = null; bloqueado = false;
+    lev.map.forEach((row, r) => [...row].forEach((ch, c) => {
+      if (ch === "@") pos = { c, r };
+      else if (conts[ch]) { conts[ch].c = c; conts[ch].r = r; }
+      else if (lev.it[ch]) items[c + "," + r] = lev.it[ch];
+    }));
+    $("titulo").textContent = lev.t; $("acertijo").textContent = lev.q;
+    $("btnSig").classList.add("hidden"); msg("");
+    pintar();
+  }
+
+  function pintar() {
+    let h = "";
+    lev.map.forEach((row, r) => [...row].forEach((ch, c) => {
+      const k = contAt(c, r), it = items[c + "," + r];
+      if (ch === "#") h += '<div class="t w"></div>';
+      else if (pos.c === c && pos.r === r) h += '<div class="t">🧑‍🔬</div>';
+      else if (k) h += `<div class="t k"><b>${k}</b><i>${conts[k].v === null ? "?" : conts[k].v}</i></div>`;
+      else if (it) h += `<div class="t i">${it}</div>`;
+      else h += '<div class="t"></div>';
+    }));
+    $("mapa").innerHTML = h;
+    $("mano").textContent = "Mano: " + (hand ?? "—");
+  }
+
+  function interactuar(nombre) {
+    const o = conts[nombre];
+    if (hand === null) {
+      if (o.v === null) msg("Recipiente vacío.");
+      else { hand = String(o.v); o.v = null; msg(`Sacaste ${hand} de ${nombre}.`, true); }
+    } else {
+      const t = o.v; o.v = Number(hand); hand = t === null ? null : String(t);
+      msg(t === null ? `Guardaste ${o.v} en ${nombre}.` : `Intercambio: ${nombre} ahora vale ${o.v}.`, true);
+    }
+    pintar(); revisar();
+  }
+
+  function mover(dc, dr) {
+    if (bloqueado) return;
+    const c = pos.c + dc, r = pos.r + dr;
+    if (lev.map[r][c] === "#") return;
+    const k = contAt(c, r);
+    if (k) { interactuar(k); return; }
+    const key = c + "," + r;
+    if (items[key]) {
+      if (hand !== null) { msg("Manos ocupadas: guarda lo que llevas en un recipiente o suéltalo (espacio)."); return; }
+      hand = items[key]; delete items[key]; msg("");
+    }
+    pos = { c, r }; pintar();
+  }
+
+  function soltar() {
+    const key = pos.c + "," + pos.r;
+    if (bloqueado || hand === null || items[key]) return;
+    items[key] = hand; hand = null; pintar();
+  }
+
+  function revisar() {
+    if (bloqueado || !lev.ok(conts)) return;
+    bloqueado = true;
+    if (nivel === NIVELES.length - 1) { setTimeout(() => terminar(true), 700); msg("¡Acertijo resuelto!", true); return; }
+    msg("¡Nivel superado!", true);
+    $("btnSig").classList.remove("hidden");
+  }
+
+  function pintarTiempo() {
+    $("timer").textContent = String(Math.floor(restante / 60)).padStart(2, "0") + ":" + String(restante % 60).padStart(2, "0");
+    $("timer").classList.toggle("low", restante <= 30);
+  }
+
+  function terminar(gano) {
+    clearInterval(intervalo);
+    $("finalTitulo").textContent = gano ? "¡Ganaste! 🏆" : "¡TIEMPO AGOTADO! ⏱️💥";
+    $("finalTexto").textContent = gano ? `Resolviste los 4 niveles con ${restante} segundos de sobra.` : "Se acabó el tiempo antes de terminar el laboratorio.";
+    ["inicio", "juego", "final"].forEach(s => $(s).classList.toggle("hidden", s !== "final"));
+  }
+
+  function iniciar() {
+    ["inicio", "juego", "final"].forEach(s => $(s).classList.toggle("hidden", s !== "juego"));
+    clearInterval(intervalo);
+    restante = TOTAL; pintarTiempo();
+    intervalo = setInterval(() => { restante--; pintarTiempo(); if (restante <= 0) terminar(false); }, 1000);
+    cargar(0);
+  }
+
+  addEventListener("keydown", e => {
+    if ($("juego").classList.contains("hidden")) return;
+    const k = e.key.toLowerCase();
+    const m = { arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1], arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0] }[k];
+    if (m) { e.preventDefault(); mover(m[0], m[1]); }
+    else if (k === " ") { e.preventDefault(); soltar(); }
+    else if (k === "r") cargar(nivel);
+  });
+  document.querySelectorAll("button[data-d]").forEach(b => b.addEventListener("click", () => mover(...b.dataset.d.split(",").map(Number))));
+  $("btnSoltar").onclick = soltar;
+  $("btnNivel").onclick = () => cargar(nivel);
+  $("btnSig").onclick = () => cargar(nivel + 1);
+  $("btnIniciar").onclick = iniciar;
+  $("btnReiniciar").onclick = iniciar;
+</script>
+</body>
+</html>
